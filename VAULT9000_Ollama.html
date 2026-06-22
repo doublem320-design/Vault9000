@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>VAULT 9000 — Pro Command Center</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        :root { --bg: #050810; --cmd: #a855f7; --prod: #3b82f6; --intel: #f97316; }
+        body { background: var(--bg); color: #fff; font-family: 'Share Tech Mono', monospace; margin: 0; padding: 40px; }
+        .room-card { border: 1px solid #1e293b; padding: 15px; background: rgba(0,0,0,0.5); cursor: pointer; transition: 0.3s; text-align: center; }
+        .room-card:hover { border-color: var(--color); box-shadow: 0 0 10px var(--color); transform: translateY(-5px); }
+        .room-name { font-weight: bold; font-size: 0.9rem; color: var(--color); margin-top: 10px; }
+        .icon { font-size: 2rem; margin-bottom: 5px; }
+    </style>
+</head>
+<body>
+<div class="max-w-6xl mx-auto">
+    <h1 class="text-3xl font-bold text-green-500 mb-6">VAULT 9000 ENGINE</h1>
+    
+    <!-- NEW: LIVE MONITOR SECTION -->
+    <div class="mb-8 p-6 border border-green-500/20 bg-black rounded shadow-[0_0_15px_rgba(34,197,94,0.1)]">
+        <h2 class="text-green-500 font-bold mb-3 tracking-widest">▸ SYSTEM STATUS FEED</h2>
+        <div id="system-status" class="text-sm text-slate-400 font-mono">
+            CONNECTING TO BRIDGE...
+        </div>
+    </div>
+
+    <div class="floor mb-10"><h2 style="color: var(--cmd)">▸ COMMAND DECK</h2><div class="grid grid-cols-4 gap-4 mt-4" id="floor-command"></div></div>
+    <div class="floor mb-10"><h2 style="color: var(--prod)">▸ PRODUCTION DECK</h2><div class="grid grid-cols-4 gap-4 mt-4" id="floor-production"></div></div>
+    <div class="floor mb-10"><h2 style="color: var(--intel)">▸ INTELLIGENCE DECK</h2><div class="grid grid-cols-4 gap-4 mt-4" id="floor-intel"></div></div>
+</div>
+
+<script>
+const BACKEND_URL = "http://localhost:3000";
+const IconMap = { 'command': '🧠', 'prod': '🛡️', 'intel': '🔬' };
+
+// NEW: Polls the server for the current agent status
+async function updateStatus() {
+    try {
+        const res = await fetch(`${BACKEND_URL}/api/agent/status`);
+        const status = await res.json();
+        const display = document.getElementById('system-status');
+        display.innerHTML = `
+            <span class="text-green-400">[${status.agent || 'IDLE'}]</span> 
+            <span class="uppercase">STATUS: ${status.status || 'READY'}</span> 
+            <span class="text-slate-600">| ${status.timestamp || '--:--'}</span>
+        `;
+    } catch(e) { document.getElementById('system-status').innerText = "BRIDGE DISCONNECTED"; }
+}
+
+async function renderVault() {
+    const containers = { 
+        command: document.getElementById('floor-command'), 
+        production: document.getElementById('floor-production'), 
+        intel: document.getElementById('floor-intel') 
+    };
+    const colors = { command: '#a855f7', production: '#3b82f6', intel: '#f97316' };
+
+    try {
+        const res = await fetch(`${BACKEND_URL}/api/debug/scripts`);
+        const data = await res.json();
+        
+        Object.values(containers).forEach(c => c.innerHTML = '');
+
+        data.foundFiles.forEach(file => {
+            const name = file.name.replace('.ps1', '');
+            const lower = name.toLowerCase();
+            let type = lower.includes('prod') ? 'production' : (lower.includes('command') ? 'command' : 'intel');
+            
+            const card = document.createElement('div');
+            card.className = 'room-card';
+            card.style.setProperty('--color', colors[type]);
+            card.onclick = () => runAgent(name); 
+            
+            card.innerHTML = `
+                <div class="icon">${IconMap[type] || '🤖'}</div>
+                <div class="room-name">${name.toUpperCase()}</div>
+            `;
+            containers[type].appendChild(card);
+        });
+    } catch (e) { console.error("Bridge Connection Error:", e); }
+}
+
+async function runAgent(name) {
+    try {
+        await fetch(`${BACKEND_URL}/api/agent/run`, { 
+            method: 'POST', 
+            headers: {'Content-Type': 'application/json'}, 
+            body: JSON.stringify({ roomName: name }) 
+        });
+    } catch (e) { alert("Execution Failed."); }
+}
+
+// Refresh logic
+setInterval(renderVault, 10000);
+setInterval(updateStatus, 2000); // Status updates faster
+document.addEventListener('DOMContentLoaded', () => { renderVault(); updateStatus(); });
+</script>
+</body>
+</html>
